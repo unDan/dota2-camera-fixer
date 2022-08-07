@@ -119,30 +119,6 @@ func replaceAttributeValues(attrs []dotaCameraAttribute) (map[int]string, error)
 	return replacedStrs, nil
 }
 
-/* func changeAttributeValue(dllFile *os.File, attr dotaCameraAttribute, currentStrNumber *int) (changedStr string, err error) {
-	attrOldVal := strconv.Itoa(attr.OldValue)
-	attrNewVal := strconv.Itoa(attr.NewValue)
-
-	scanner := bufio.NewReader(dllFile)
-	str, err := scanner.ReadString(delimChar)
-
-	for err == nil {
-		if strings.Contains(str, attrOldVal) {
-			changedStr = strings.Replace(str, attrOldVal, attrNewVal, 1)
-			break
-		}
-
-		str, err = scanner.ReadString(delimChar)
-		*currentStrNumber++
-	}
-
-	if err != nil && err != io.EOF {
-		return "", err
-	} else {
-		return changedStr, nil
-	}
-} */
-
 func backupDllFile() (isBackupNeeded bool, err error) {
 	isBackupNeeded = false
 	backupDirPath := filepath.Join(dllDirPath, backupDirName)
