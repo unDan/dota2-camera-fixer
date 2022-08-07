@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -256,4 +257,6 @@ func main() {
 	}
 
 	log.Println("[INFO] Done.")
+
+	fmt.Scanf("%s")
 }
