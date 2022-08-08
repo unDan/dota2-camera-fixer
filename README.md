@@ -32,4 +32,4 @@ Just download the [archive](https://drive.google.com/file/d/162-xJLHd5hNneHBrWeQ
 2. Clone this repo to your local machine.
 3. Open repo directory in terminal.
 4. Execute *go build* command.
-5. Now your can feel yourself a very skilled Golang developer and run created executable file just from this folder.
+5. Now you can feel yourself a very skilled Golang developer and run created executable file just from this folder.
