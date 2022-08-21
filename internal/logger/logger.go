@@ -16,7 +16,7 @@ func NewLogger(showLogInfo bool) Logger {
 }
 
 func (l Logger) Print(msg string, a ...any) {
-	logMsg := fmt.Sprintf("[ERROR] %s", fmt.Sprintf(msg, a...))
+	logMsg := fmt.Sprintf("%s", fmt.Sprintf(msg, a...))
 	log.Println(logMsg)
 }
 

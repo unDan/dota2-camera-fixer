@@ -12,4 +12,5 @@ type AppSettings struct {
 	DllFileName         string
 	SaveFileName        string
 	FileReaderDelimiter byte
+	TimeFormat          string
 }

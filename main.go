@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"time"
 
 	"os"
 	"path/filepath"
@@ -27,9 +28,14 @@ var configFileName string = "config.ini"
 var userPrefs cfg.UserPrefs = cfg.UserPrefs{}
 var appSettings cfg.AppSettings = cfg.AppSettings{
 	FileReaderDelimiter: '\x00',
+	TimeFormat:          "2006-01-02T15:04:05.999999Z",
 }
 
-var log logger.Logger
+var dllFilePath string
+var backupDirPath string
+var saveFilePath string
+
+var log logger.Logger = logger.NewLogger(true)
 
 func readConfigFile() error {
 	iniData, err := ini.Load(configFileName)
@@ -44,11 +50,19 @@ func readConfigFile() error {
 		return err
 	}
 
-	log = logger.NewLogger(userPrefs.ShowLogInfo)
-
 	err = iniData.Section("AppSettings").MapTo(&appSettings)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	log = logger.NewLogger(userPrefs.ShowLogInfo)
+
+	dllFilePath = filepath.Join(userPrefs.SteamDirPath, appSettings.DllDirPath, appSettings.DllFileName)
+	backupDirPath = filepath.Join(userPrefs.SteamDirPath, appSettings.DllDirPath, userPrefs.BackupDirName)
+	saveFilePath = filepath.Join(userPrefs.SteamDirPath, appSettings.DllDirPath, userPrefs.BackupDirName, appSettings.SaveFileName)
+
+	return nil
 }
 
 func readCameraValuesFile() ([]DotaCameraAttribute, error) {
@@ -65,16 +79,16 @@ func readCameraValuesFile() ([]DotaCameraAttribute, error) {
 func replaceAttributeValues(attrs []DotaCameraAttribute) (map[int]string, error) {
 	replacedStrs := make(map[int]string)
 
-	log.Info("[INFO] Opening dota 2 client.dll file...")
+	log.Info("Opening dota 2 client.dll file...")
 
-	dllFile, err := os.Open(filepath.Join(userPrefs.SteamDirPath, appSettings.DllDirPath, appSettings.DllFileName))
+	dllFile, err := os.Open(dllFilePath)
 	if err != nil {
 		return nil, err
 	}
 	defer dllFile.Close()
 
-	log.Info("[INFO] Successfully opened client.dll file.")
-	log.Info("[INFO] Scanning client.dll file...")
+	log.Info("Successfully opened client.dll file.")
+	log.Info("Scanning client.dll file...")
 
 	scanner := bufio.NewReader(dllFile)
 	str, err := scanner.ReadString(appSettings.FileReaderDelimiter)
@@ -85,8 +99,6 @@ func replaceAttributeValues(attrs []DotaCameraAttribute) (map[int]string, error)
 			if !strings.Contains(str, attr.AttributeName) {
 				continue
 			}
-
-			log.Info("[INFO] Found attribute %s.", attr.AttributeName)
 
 			changedStr := ""
 
@@ -112,7 +124,7 @@ func replaceAttributeValues(attrs []DotaCameraAttribute) (map[int]string, error)
 
 			replacedStrs[currentStrNumber] = changedStr
 
-			log.Info("[INFO] Successfully changed attribute '%s' value: %d -> %d.", attr.AttributeName, attr.OldValue, attr.NewValue)
+			log.Info("Successfully changed attribute '%s' value: %d -> %d.", attr.AttributeName, attr.OldValue, attr.NewValue)
 		}
 
 		str, err = scanner.ReadString(appSettings.FileReaderDelimiter)
@@ -123,68 +135,101 @@ func replaceAttributeValues(attrs []DotaCameraAttribute) (map[int]string, error)
 		return nil, err
 	}
 
-	log.Info("[INFO] Successfully scanned client.dll file and replaced camera attribute values.")
-
 	return replacedStrs, nil
 }
 
-func backupDllFile() (isBackupNeeded bool, err error) {
-	isBackupNeeded = false
-	backupDirPath := filepath.Join(userPrefs.SteamDirPath, appSettings.DllDirPath, userPrefs.BackupDirName)
+func isBackupDirExists() bool {
+	_, err := os.Stat(backupDirPath)
 
-	_, err = os.Stat(backupDirPath)
+	return !os.IsNotExist(err)
+}
+
+func hasGameBeenUpdated() (bool, error) {
+	_, err := os.Stat(saveFilePath)
 
 	if os.IsNotExist(err) {
-		isBackupNeeded = true
-
-		os.Mkdir(backupDirPath, os.ModeDir)
-
-		in, err := os.Open(filepath.Join(userPrefs.SteamDirPath, appSettings.DllDirPath, appSettings.DllFileName))
-		if err != nil {
-			return isBackupNeeded, err
-		}
-		defer in.Close()
-
-		out, err := os.Create(filepath.Join(backupDirPath, appSettings.DllFileName))
-		if err != nil {
-			return isBackupNeeded, err
-		}
-		defer out.Close()
-
-		_, err = io.Copy(out, in)
-		if err != nil {
-			return isBackupNeeded, err
-		}
-
-		return isBackupNeeded, out.Close()
+		return true, nil
 	}
 
-	return isBackupNeeded, nil
+	fbytes, err := ioutil.ReadFile(saveFilePath)
+	if err != nil {
+		return false, err
+	}
+
+	lastDllOverwritingDate, err := time.Parse(appSettings.TimeFormat, string(fbytes))
+
+	if err != nil {
+		return false, err
+	}
+
+	dllStats, err := os.Stat(dllFilePath)
+
+	if err != nil {
+		return false, err
+	}
+
+	currentDllOverwritingDate := dllStats.ModTime().UTC()
+
+	if currentDllOverwritingDate.Unix() <= lastDllOverwritingDate.Unix() {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func saveDllLastModifyDate() error {
+	saveFile, err := os.Create(saveFilePath)
+	if err != nil {
+		return err
+	}
+	defer saveFile.Close()
+
+	dllStats, err := os.Stat(dllFilePath)
+	if err != nil {
+		return err
+	}
+
+	saveFile.WriteString(dllStats.ModTime().UTC().Format(appSettings.TimeFormat))
+
+	return nil
+}
+
+func backupDllFile() (err error) {
+	in, err := os.Open(dllFilePath)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(filepath.Join(backupDirPath, appSettings.DllFileName))
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+
+	return out.Close()
 }
 
 func rewriteDllFile(replacedStrs map[int]string) error {
-	log.Info("[INFO] Opening backup file...")
-
-	backupDllFile, err := os.Open(filepath.Join(userPrefs.SteamDirPath, appSettings.DllDirPath, userPrefs.BackupDirName, appSettings.DllFileName))
+	backupDllFile, err := os.Open(filepath.Join(backupDirPath, appSettings.DllFileName))
 	if err != nil {
 		return err
 	}
 	defer backupDllFile.Close()
 
-	log.Info("[INFO] Successfully opened backup file.")
-	log.Info("[INFO] Opening actual dll file for overwriting...")
-
-	overwrittenDllFile, err := os.Create(filepath.Join(userPrefs.SteamDirPath, appSettings.DllDirPath, appSettings.DllFileName))
+	overwrittenDllFile, err := os.Create(dllFilePath)
 	if err != nil {
 		return err
 	}
 	defer overwrittenDllFile.Close()
 
-	log.Info("[INFO] Successfully opened actual dll file.")
-	log.Info("[INFO] Rewriting data using replaced attribute values...")
-
-	scanner := bufio.NewReader(backupDllFile)
-	str, err := scanner.ReadString(appSettings.FileReaderDelimiter)
+	reader := bufio.NewReader(backupDllFile)
+	str, err := reader.ReadString(appSettings.FileReaderDelimiter)
 	strNumber := 1
 
 	for err == nil {
@@ -209,7 +254,7 @@ func rewriteDllFile(replacedStrs map[int]string) error {
 			}
 		}
 
-		str, err = scanner.ReadString(appSettings.FileReaderDelimiter)
+		str, err = reader.ReadString(appSettings.FileReaderDelimiter)
 		strNumber++
 	}
 
@@ -220,51 +265,116 @@ func rewriteDllFile(replacedStrs map[int]string) error {
 	return nil
 }
 
+func cleanDllFile() error {
+	backupDllFile, err := os.Open(filepath.Join(backupDirPath, appSettings.DllFileName))
+	if err != nil {
+		return err
+	}
+	defer backupDllFile.Close()
+
+	overwrittenDllFile, err := os.Create(dllFilePath)
+	if err != nil {
+		return err
+	}
+	defer overwrittenDllFile.Close()
+
+	reader := bufio.NewReader(backupDllFile)
+	str, err := reader.ReadString('\n')
+
+	for err == nil {
+		overwrittenDllFile.WriteString(str)
+		str, err = reader.ReadString('\n')
+	}
+
+	if err != nil && err != io.EOF {
+		return err
+	}
+
+	return nil
+}
+
 func main() {
-	log.Info("[INFO] Reading %s file...", configFileName)
+	log.Info("Reading %s file...", configFileName)
 
 	err := readConfigFile()
 	if err != nil {
-		log.Error("[ERROR] Could not read config file: %v", err)
+		log.Error("Could not read config file: %v", err)
 	}
 
-	log.Info("[INFO] Successfully read %s file.", configFileName)
-	log.Info("[INFO] Reading %s file...", userPrefs.CameraValuesFileName)
+	log.Info("Successfully read %s file.", configFileName)
+	log.Info("Reading %s file...", userPrefs.CameraValuesFileName)
 
 	attrs, err := readCameraValuesFile()
 	if err != nil {
-		log.Error("[ERROR] Could not read camera values file: %v", err)
+		log.Error("Could not read camera values file: %v", err)
 	}
 
-	log.Info("[INFO] Successfully read %s file.", userPrefs.CameraValuesFileName)
-	log.Info("[INFO] Backing up %s file...", appSettings.DllFileName)
+	log.Info("Successfully read %s file.", userPrefs.CameraValuesFileName)
 
-	isBackupNeeded, err := backupDllFile()
-	if err != nil {
-		log.Error("[ERROR] Could not backup dll file: %v", err)
+	isBackupNeeded := false
+
+	// if backup dir does not exist (the first app launch after installation) then create it
+	// otherwise decide whether to backup dll or not depending on the whether the game has been updated
+	if !isBackupDirExists() {
+		os.Mkdir(filepath.Join(userPrefs.SteamDirPath, appSettings.DllDirPath, userPrefs.BackupDirName), os.ModeDir)
+		isBackupNeeded = true
+
+		log.Info("Backup file does not exist. Backing up %s file...", appSettings.DllFileName)
+	} else {
+		log.Info("Checking whether the game has been updated...")
+
+		isBackupNeeded, err = hasGameBeenUpdated()
+
+		if err != nil {
+			log.Error("Could not check whether the game has been updated: %v", err)
+		}
+
+		if isBackupNeeded {
+			log.Info("Game has been updated. Backing up %s file...", appSettings.DllFileName)
+		} else {
+			log.Info("Game has not been updated, no backup needed.")
+		}
 	}
 
 	if isBackupNeeded {
-		log.Info("[INFO] Successfully backed up %s file.", appSettings.DllFileName)
+		err = backupDllFile()
+		if err != nil {
+			log.Error("Could not backup dll file: %v", err)
+		}
+
+		log.Info("Successfully backed up %s file", appSettings.DllFileName)
 	} else {
-		log.Info("[INFO] Backup file already exists, no backup needed.")
+		err = cleanDllFile() // rewrite the whole dll file with contents from backup file (return dll to its original state)
+		if err != nil {
+			log.Error("Could not rewrite dll file to its original state: %v", err)
+		}
 	}
-	log.Info("[INFO] Changing camera attributes...")
+
+	log.Info("Changing camera attributes...")
 
 	replacedLines, err := replaceAttributeValues(attrs)
 	if err != nil {
-		log.Error("[ERROR] Could not replace camera attributes: %v", err)
+		log.Error("Could not replace camera attributes: %v", err)
 	}
 
-	log.Info("[INFO] Successfully changed camera attributes.")
-	log.Info("[INFO] Overwriting dll file...")
+	log.Info("Successfully changed camera attributes.")
+	log.Info("Overwriting dll file...")
 
 	err = rewriteDllFile(replacedLines)
 	if err != nil {
-		log.Error("[ERROR] Could not overwrite dll file: %v", err)
+		log.Error("Could not overwrite dll file: %v", err)
 	}
 
-	log.Print("[INFO] Done.")
+	log.Info("Saving application state...")
+
+	err = saveDllLastModifyDate()
+	if err != nil {
+		log.Error("Could not save application state: %v", err)
+	}
+
+	log.Info("Successfully saved application state.")
+
+	log.Print("Done.")
 
 	fmt.Scanf("%s")
 }
