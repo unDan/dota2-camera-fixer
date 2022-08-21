@@ -5,7 +5,7 @@ There are 2 files (excluding executable) needed for application to work properly
 - *camera-values.json* - contains camera attributes with its actual values and replace values, feel free to change value of 'newValue' fields to get 
 results that will satisfy you;
 - *config.ini* - file containing path to Steam directory and other user preferences that you can change, you must replace the path inside to your actual path to Steam directory. **Do not change anyting in "AppSettings" section!**
-### How to use
+### First usage
 0. Check game files integrity via Steam to make sure your *client.dll* is not modified;
 1. Open *config.ini* and change value of "SteamDirPath" field to path to your Steam directory, for example *C:\Program Files (x86)\Steam* for Windows,
 or */home/Steam* for Linux;
