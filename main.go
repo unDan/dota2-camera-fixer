@@ -90,8 +90,8 @@ func replaceAttributeValues(attrs []DotaCameraAttribute) (map[int]string, error)
 	log.Info("Successfully opened client.dll file.")
 	log.Info("Scanning client.dll file...")
 
-	scanner := bufio.NewReader(dllFile)
-	str, err := scanner.ReadString(appSettings.FileReaderDelimiter)
+	reader := bufio.NewReader(dllFile)
+	str, err := reader.ReadString(appSettings.FileReaderDelimiter)
 	currentStrNumber := 1
 
 	for err == nil {
@@ -103,7 +103,7 @@ func replaceAttributeValues(attrs []DotaCameraAttribute) (map[int]string, error)
 			changedStr := ""
 
 			for err == nil {
-				str, err = scanner.ReadString(appSettings.FileReaderDelimiter)
+				str, err = reader.ReadString(appSettings.FileReaderDelimiter)
 				currentStrNumber++
 
 				if strings.Contains(str, strconv.Itoa(attr.OldValue)) {
@@ -127,7 +127,7 @@ func replaceAttributeValues(attrs []DotaCameraAttribute) (map[int]string, error)
 			log.Info("Successfully changed attribute '%s' value: %d -> %d.", attr.AttributeName, attr.OldValue, attr.NewValue)
 		}
 
-		str, err = scanner.ReadString(appSettings.FileReaderDelimiter)
+		str, err = reader.ReadString(appSettings.FileReaderDelimiter)
 		currentStrNumber++
 	}
 
@@ -156,7 +156,7 @@ func hasGameBeenUpdated() (bool, error) {
 		return false, err
 	}
 
-	lastDllOverwritingDate, err := time.Parse(appSettings.TimeFormat, string(fbytes))
+	lastSavedDllModifyDate, err := time.Parse(appSettings.TimeFormat, string(fbytes))
 
 	if err != nil {
 		return false, err
@@ -168,9 +168,9 @@ func hasGameBeenUpdated() (bool, error) {
 		return false, err
 	}
 
-	currentDllOverwritingDate := dllStats.ModTime().UTC()
+	actualDllModifyDate := dllStats.ModTime().UTC()
 
-	if currentDllOverwritingDate.Unix() <= lastDllOverwritingDate.Unix() {
+	if actualDllModifyDate.Unix() <= lastSavedDllModifyDate.Unix() {
 		return false, nil
 	}
 
@@ -195,24 +195,45 @@ func saveDllLastModifyDate() error {
 }
 
 func backupDllFile() (err error) {
-	in, err := os.Open(dllFilePath)
+	from, err := os.Open(dllFilePath)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer from.Close()
 
-	out, err := os.Create(filepath.Join(backupDirPath, appSettings.DllFileName))
+	to, err := os.Create(filepath.Join(backupDirPath, appSettings.DllFileName))
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer to.Close()
 
-	_, err = io.Copy(out, in)
+	_, err = io.Copy(to, from)
 	if err != nil {
 		return err
 	}
 
-	return out.Close()
+	return to.Close()
+}
+
+func cleanDllFileChanges() error {
+	from, err := os.Open(filepath.Join(backupDirPath, appSettings.DllFileName))
+	if err != nil {
+		return err
+	}
+	defer from.Close()
+
+	to, err := os.Create(dllFilePath)
+	if err != nil {
+		return err
+	}
+	defer to.Close()
+
+	_, err = io.Copy(from, to)
+	if err != nil {
+		return err
+	}
+
+	return to.Close()
 }
 
 func rewriteDllFile(replacedStrs map[int]string) error {
@@ -256,34 +277,6 @@ func rewriteDllFile(replacedStrs map[int]string) error {
 
 		str, err = reader.ReadString(appSettings.FileReaderDelimiter)
 		strNumber++
-	}
-
-	if err != nil && err != io.EOF {
-		return err
-	}
-
-	return nil
-}
-
-func cleanDllFile() error {
-	backupDllFile, err := os.Open(filepath.Join(backupDirPath, appSettings.DllFileName))
-	if err != nil {
-		return err
-	}
-	defer backupDllFile.Close()
-
-	overwrittenDllFile, err := os.Create(dllFilePath)
-	if err != nil {
-		return err
-	}
-	defer overwrittenDllFile.Close()
-
-	reader := bufio.NewReader(backupDllFile)
-	str, err := reader.ReadString('\n')
-
-	for err == nil {
-		overwrittenDllFile.WriteString(str)
-		str, err = reader.ReadString('\n')
 	}
 
 	if err != nil && err != io.EOF {
@@ -344,7 +337,7 @@ func main() {
 
 		log.Info("Successfully backed up %s file", appSettings.DllFileName)
 	} else {
-		err = cleanDllFile() // rewrite the whole dll file with contents from backup file (return dll to its original state)
+		err = cleanDllFileChanges() // rewrite the whole dll file with contents from backup file (return dll to its original state)
 		if err != nil {
 			log.Error("Could not rewrite dll file to its original state: %v", err)
 		}
