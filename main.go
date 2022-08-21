@@ -28,7 +28,6 @@ var configFileName string = "config.ini"
 var userPrefs cfg.UserPrefs = cfg.UserPrefs{}
 var appSettings cfg.AppSettings = cfg.AppSettings{
 	FileReaderDelimiter: '\x00',
-	TimeFormat:          "2006-01-02T15:04:05.999999Z",
 }
 
 var dllFilePath string
