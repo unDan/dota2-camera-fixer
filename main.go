@@ -227,7 +227,7 @@ func cleanDllFileChanges() error {
 	}
 	defer to.Close()
 
-	_, err = io.Copy(from, to)
+	_, err = io.Copy(to, from)
 	if err != nil {
 		return err
 	}
