@@ -11,8 +11,7 @@ results that will satisfy you;
 2. Open *camera-values.json* and change 'newValue' field values to more suitable for you, but keep in mind that **all values are integers** and:
     - *dota_camera_distance_min* must be **less than 10000**
     - *dota_camera_fov_min* must be **less than 90**
-    - *dota_camera_pitch_min* must be **less than 90**
-    - *dota_camera_distance* must be **less than 100**
+    - *dota_camera_distance_teamspec* must be **less than 100**
     - *sv_noclipaccelerate* must be **less than 10000**
 3. Run *dota2-camera-fixer* executable and wait until message 'Done' is printed.
 4. Run DOTA 2 and enjoy your fixed camera.
