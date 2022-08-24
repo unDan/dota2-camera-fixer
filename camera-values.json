@@ -2,26 +2,21 @@
     {
         "attributeName": "dota_camera_distance_min",
         "oldValue": 1134,
-        "newValue": 1650
+        "newValue": 1350
     },
     {
         "attributeName": "dota_camera_fov_min",
-        "oldValue": 60,
+        "oldValue": 45,
         "newValue": 89
-    },
-    {
-        "attributeName": "dota_camera_pitch_min",
-        "oldValue": 38,
-        "newValue": 89
-    },
-    {
-        "attributeName": "dota_camera_distance",
-        "oldValue": 55,
-        "newValue": 99
     },
     {
         "attributeName": "sv_noclipaccelerate",
         "oldValue": 1200,
-        "newValue": 1650
+        "newValue": 1300
+    },
+    {
+        "attributeName": "dota_camera_distance_teamspec",
+        "oldValue": 38,
+        "newValue": 89
     }
 ]
